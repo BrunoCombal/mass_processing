@@ -11,7 +11,8 @@ from scipy.stats.stats import pearsonr
 # 
 inDir='//ies.jrc.it/H03/Forobs_Export/verhegghen_export/Pour_Bruno/clip'
 inFileFilter='*.tif'
-duplicatesDir=''
+uniqueDir='E://tmp/unique'
+duplicatesDir='E://tmp/discard'
 
 #
 # functions
@@ -34,21 +35,25 @@ hashDict={}
 for ii in inFnames:
 	thisBasename = os.path.basename(ii)
 
-	for jj in inFnames:
+	curList = [os.path.join(dirpath, f) for dirpath, dirnames, files in os.walk(inDir) for f in fnmatch.filter(files, inFileFilter)]
+	for jj in curList: # to be recomputed as files are moved away
 		if ii != jj:
 			refDS = gdal.Open(ii, gdalconst.GA_ReadOnly)
 			testDS = gdal.Open(jj, gdalconst.GA_ReadOnly)
 			try:
 				corr = correlation(refDS, testDS)
-
 				if corr[0] is None:
 					print '-'
 				else:
 					if corr[0]>0.9:
 						print corr, os.path.basename(ii), os.path.basename(jj)
+						shutil.move(jj, duplicatesDir)
 					else:
 						print corr
 			except Exception, e:
 				print 'Error {} with files {} and {}'.format(e, os.path.basename(ii), os.path.basename(jj))
 			refDS = None
 			testDS = None
+	shutil.move(ii, uniqueDir)
+
+# end of script
