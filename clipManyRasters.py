@@ -11,6 +11,7 @@ import numpy
 rInDir=u'z://Processing/All_Kongo_images/Selection_Rep_of_Congo/Selection_Spot2015/Spot5'
 rOutDir=u'e://tmp/clip' #clip output dir
 rRejectDir=u'e://tmp/clipBad' # rejected
+duplicateDir=u'e://tmp/duplicate'
 selectRule=u'*.tif' # wildcard rule
 shapefile=u'e://tmp/clip/clipper_2km_square.shp'
 testBand = 2
@@ -49,6 +50,32 @@ def getBBox(fname):
         yarr.reverse()
     return ext
 
+#
+#
+#
+#
+def extractInfo(thisName):
+	date=None
+	sensor=None
+	 m = re.search(r'[12][0-9][0-9][0-9]-[012][0-9]-[0123][0-9]', thisName)
+	 if m:
+	 	date = m.group(0)
+
+	 s = re.search(r'OLI', thisName.upper())
+	 if s:
+	 	sensor = s.group(0)
+	 	return date, sensor
+
+	 s = re.search(r'S2[AB]', thisName.upper())
+	 if s:
+	 	sensor = s.group(0)
+	 	return date, sensor
+
+	 s = re.search(r'SPOT_[1234567]', thisName.upper())
+	 if s:
+	 	sensorSeries = s.group(0)
+	 	return date, sensor
+
 # 
 # ds: gdal raster file handler
 # test if proportion of no-data and cloud is low
@@ -75,8 +102,6 @@ if selectRule != u'':
 	inRasterFnames = [os.path.join(dirpath, f) for dirpath, dirnames, files in os.walk(rInDir) for f in fnmatch.filter(files, selectRule)]
 else:
 	inRasterFnames = [os.path.join(dirpath, files) for dirpath, dirnames, files in os.walk(rInDir) ]
-
-
 
 # save their bbox
 print 'Getting raster files Bounding boxes'
@@ -119,13 +144,18 @@ for rr in rasterBBox:
 			try:
 				ds = gdal.Translate('', rr, format = 'MEM', projWin = [pointMin[0], pointMax[1], pointMax[0], pointMin[1]])
 				# test no-data
-				outFileBasename = 'fid_{}_{}'.format(iFeat.GetFID(), os.path.basename(rr))
-				if testValid(ds, testBand, testMinMax, testThreshold / 100.0):
-					outFile = os.path.join(rOutDir, outFileBasename)
+				date, sensor = extractInfo(os.path.basename(rr))
+				outFileBasename = 'fid_{}_{}'.format(iFeat.GetFID(), date, sensor)
+				if os.path.exists(os.path.join(rOutDir, outFileBasename)):
+					outFile = os.path.join(duplicateDir, outFileBasename)
 				else:
-					outFile = os.path.join(rRejectDir, outFileBasename)
+					if testValid(ds, testBand, testMinMax, testThreshold / 100.0):
+						outFile = os.path.join(rOutDir, outFileBasename)
+					else:
+						outFile = os.path.join(rRejectDir, outFileBasename)
 
 				gdal.Translate(outFile, ds, format='GTIFF', options=['compress=lzw', 'bigtiff=IF_SAFER'], bandList=exportBandList)
+
 			except Exception, e:
 				print 'Error for file {}, iClip {}'.format(os.path.basename(rr), iClip)
 				print '{}'.format(e)
