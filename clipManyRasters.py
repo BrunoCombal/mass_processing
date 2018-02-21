@@ -3,6 +3,7 @@ import glob
 import fnmatch
 import os
 import numpy
+import re
 
 #__________________________________________________
 # Edit following parameters
@@ -18,9 +19,31 @@ testBand = 2
 testMinMax=[0, 250] # pixel fails if value <= min or value >= max
 testThreshold = 50 # maximum percentage of allowed failed pixels within the clip
 exportBandList = [4,3,2]
+reflectanceRescale={'minSrc':500, 'maxSrc':3000, 'minTrgt':0, 'maxTrgt':255}
 IDField="FID"
-#___________________________________________________
 
+#
+# rescale image values
+#___________________________________________________
+def rescale(outFile, ds, scaleParams, bandList, format, outputType, options):
+
+	thisOut = gdal.GetDriverByName(format).Create(outFile, ds.RasterXSize, ds.RasterYSize, len(bandList), outputType, options=options )
+	thisOut.SetProjection(ds.GetProjection())
+	thisOut.SetGeoTransform(ds.GetGeoTransform())
+
+	thisBand=1
+	for ib in bandList:
+		thisData = None
+		thisData = numpy.array(ds.GetRasterBand(ib).ReadAsArray(0, 0, ds.RasterXSize, ds.RasterYSize)).astype(numpy.float32)
+		WTCmin = thisData <= scaleParams[0]
+		WTCmax = thisData >= scaleParams[1]
+		thisDataNew = scaleParams[2]+(scaleParams[3]-scaleParams[2])*(thisData - scaleParams[0])/float(scaleParams[1]-scaleParams[0])
+		thisDataNew[WTCmin] = scaleParams[2]
+		thisDataNew[WTCmax] = scaleParams[3]
+		#thisDataNew = (thisData-500)/2000
+
+		thisOut.GetRasterBand(thisBand).WriteArray(thisDataNew, 0, 0)
+		thisBand += 1
 #
 # returns BBox in EPSG:4326
 #
@@ -51,31 +74,38 @@ def getBBox(fname):
     return ext
 
 #
-#
-#
+# extract information from file names
 #
 def extractInfo(thisName):
 	date=None
 	sensor=None
-	 m = re.search(r'[12][0-9][0-9][0-9]-[012][0-9]-[0123][0-9]', thisName)
-	 if m:
-	 	date = m.group(0)
+	# search Spot formatted dates YYYY-MM-DD
+	m = re.search(r'[12][0-9][0-9][0-9]-[012][0-9]-[0123][0-9]', thisName)
+	if m:
+		dateTmp = m.group(0)
+		dateComponents = dateTmp.split('-')
+		date = '{}{}{}'.format(dateComponents[0], dateComponents[1], dateComponents[2])
+	else: # search general dates YYYYMMDD
+		m=re.search(r'[12][0-9][0-9][0-9][01][0-9][0123][0-9]', thisName)
+		if m:
+			date =m.group(0)
 
-	 s = re.search(r'OLI', thisName.upper())
-	 if s:
-	 	sensor = s.group(0)
-	 	return date, sensor
+	s = re.search(r'OLI', thisName.upper())
+	if s:
+		sensor = s.group(0)
+		return date, sensor
 
-	 s = re.search(r'S2[AB]', thisName.upper())
-	 if s:
-	 	sensor = s.group(0)
-	 	return date, sensor
+	s = re.search(r'S2[AB]', thisName.upper())
+	if s:
+		sensor = s.group(0)
+		return date, sensor
 
-	 s = re.search(r'SPOT_[1234567]', thisName.upper())
-	 if s:
-	 	sensorSeries = s.group(0)
-	 	return date, sensor
+	s = re.search(r'SPOT_[1234567]', thisName.upper())
+	if s:
+		sensor = s.group(0)
+		return date, sensor
 
+	return date, sensor
 # 
 # ds: gdal raster file handler
 # test if proportion of no-data and cloud is low
@@ -93,6 +123,16 @@ def testValid(ds, testBand, minmax, threshold):
 		return False
 	else:
 		return True
+
+# _____________________________________________________________
+#
+# main code starts here
+#
+for thisDir in [rInDir, rOutDir, rRejectDir, duplicateDir]:
+	if not os.path.isdir(thisDir):
+		print 'Directory {} does not exists'.format(thisDir)
+		sys.exit()
+
 
 # get list of files matching the regex rule
 print 'Getting list of raster files to process'
@@ -139,13 +179,13 @@ for rr in rasterBBox:
 				lat.append(thisLat)
 			pointMin = transformation.TransformPoint(min(lon), min(lat))
 			pointMax = transformation.TransformPoint(max(lon), max(lat))
-	    	# see http://svn.osgeo.org/gdal/trunk/autotest/utilities/test_gdalwarp_lib.py
+			# see http://svn.osgeo.org/gdal/trunk/autotest/utilities/test_gdalwarp_lib.py
 			#ds = gdal.Warp('', tmpFile, format = 'MEM', outputBounds = [xmin, ymin, xmax, ymax])
 			try:
 				ds = gdal.Translate('', rr, format = 'MEM', projWin = [pointMin[0], pointMax[1], pointMax[0], pointMin[1]])
 				# test no-data
 				date, sensor = extractInfo(os.path.basename(rr))
-				outFileBasename = 'fid_{}_{}'.format(iFeat.GetFID(), date, sensor)
+				outFileBasename = 'fid_{}_{}_{}.tif'.format(iFeat.GetFID(), date, sensor)
 				if os.path.exists(os.path.join(rOutDir, outFileBasename)):
 					outFile = os.path.join(duplicateDir, outFileBasename)
 				else:
@@ -154,7 +194,14 @@ for rr in rasterBBox:
 					else:
 						outFile = os.path.join(rRejectDir, outFileBasename)
 
-				gdal.Translate(outFile, ds, format='GTIFF', options=['compress=lzw', 'bigtiff=IF_SAFER'], bandList=exportBandList)
+
+				rescale( outFile, ds,
+						 scaleParams = [reflectanceRescale['minSrc'],reflectanceRescale['maxSrc'], reflectanceRescale['minTrgt'], reflectanceRescale['maxTrgt']],
+						 bandList = exportBandList,
+						 format='GTIFF',outputType = gdal.GDT_Byte
+						 , options=['compress=lzw', 'bigtiff=IF_SAFER'])
+
+				#gdal.Translate(outFile, ds, format='GTIFF', options=['compress=lzw', 'bigtiff=IF_SAFER'], bandList=exportBandList)
 
 			except Exception, e:
 				print 'Error for file {}, iClip {}'.format(os.path.basename(rr), iClip)
