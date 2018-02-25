@@ -19,13 +19,17 @@ testBand = 2
 testMinMax=[0, 250] # pixel fails if value <= min or value >= max
 testThreshold = 50 # maximum percentage of allowed failed pixels within the clip
 exportBandList = [4,3,2]
+rescaleType='percentile' # 'value', 'percentile', 'std'
+# for reflectanceRescale: 	if 'value': minSrc and maxSrc are the min-max values
+#							if 'std': minSrc=-x, maxSrc=x, then min= average-x*std, max=average+x*std
+#							if 'percentile': minSrc=a, maxSrc=b, min=percentile(a), max=percentile(b)
 reflectanceRescale={'minSrc':500, 'maxSrc':3000, 'minTrgt':0, 'maxTrgt':255}
 IDField="FID"
 
 #
 # rescale image values
 #___________________________________________________
-def rescale(outFile, ds, scaleParams, bandList, format, outputType, options):
+def rescale(outFile, ds, scaleType, scaleParams, bandList, format, outputType, options):
 
 	thisOut = gdal.GetDriverByName(format).Create(outFile, ds.RasterXSize, ds.RasterYSize, len(bandList), outputType, options=options )
 	thisOut.SetProjection(ds.GetProjection())
@@ -35,12 +39,27 @@ def rescale(outFile, ds, scaleParams, bandList, format, outputType, options):
 	for ib in bandList:
 		thisData = None
 		thisData = numpy.array(ds.GetRasterBand(ib).ReadAsArray(0, 0, ds.RasterXSize, ds.RasterYSize)).astype(numpy.float32)
-		WTCmin = thisData <= scaleParams[0]
-		WTCmax = thisData >= scaleParams[1]
-		thisDataNew = scaleParams[2]+(scaleParams[3]-scaleParams[2])*(thisData - scaleParams[0])/float(scaleParams[1]-scaleParams[0])
-		thisDataNew[WTCmin] = scaleParams[2]
-		thisDataNew[WTCmax] = scaleParams[3]
-		#thisDataNew = (thisData-500)/2000
+
+		if rescaleType == 'value':
+			WTCmin = thisData <= scaleParams[0]
+			WTCmax = thisData >= scaleParams[1]
+			thisDataNew = scaleParams[2]+(scaleParams[3]-scaleParams[2])*(thisData - scaleParams[0])/float(scaleParams[1]-scaleParams[0])
+			thisDataNew[WTCmin] = scaleParams[2]
+			thisDataNew[WTCmax] = scaleParams[3]
+		elif rescaleType == 'percentile':
+			dataMinVal = numpy.percentile(thisData, scaleParams[0])
+			dataMaxVal = numpy.percentile(thisData, scaleParams[1])
+			WTCmin = thisData <= dataMinVal
+			WTCmax = thisData >= dataMaxVal
+			thisDataNew = scaleParams[2]+(scaleParams[3]-scaleParams[2])*(thisData - dataMinVal)/float(dataMaxVal-dataMinVal)
+		elif rescaleType == 'std':
+			average = thisData.mean()
+			std = thisData.std()
+			dataMinVal = average - scaleParams[0]*std
+			dataMaxVal = average + scaleParams[1]*std
+			thisDataNew = scaleParams[2]+(scaleParams[3]-scaleParams[2])*(thisData - dataMinVal)/float(dataMaxVal-dataMinVal)
+		else:
+			raise('Error unknown rescaleType {}'.format(rescaleType))
 
 		thisOut.GetRasterBand(thisBand).WriteArray(thisDataNew, 0, 0)
 		thisBand += 1
@@ -196,10 +215,11 @@ for rr in rasterBBox:
 
 
 				rescale( outFile, ds,
-						 scaleParams = [reflectanceRescale['minSrc'],reflectanceRescale['maxSrc'], reflectanceRescale['minTrgt'], reflectanceRescale['maxTrgt']],
-						 bandList = exportBandList,
-						 format='GTIFF',outputType = gdal.GDT_Byte
-						 , options=['compress=lzw', 'bigtiff=IF_SAFER'])
+						rescaleType,
+						scaleParams = [reflectanceRescale['minSrc'],reflectanceRescale['maxSrc'], reflectanceRescale['minTrgt'], reflectanceRescale['maxTrgt']],
+						bandList = exportBandList,
+						format='GTIFF',outputType = gdal.GDT_Byte,
+						options=['compress=lzw', 'bigtiff=IF_SAFER'])
 
 				#gdal.Translate(outFile, ds, format='GTIFF', options=['compress=lzw', 'bigtiff=IF_SAFER'], bandList=exportBandList)
 
