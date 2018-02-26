@@ -20,10 +20,12 @@ testMinMax=[0, 250] # pixel fails if value <= min or value >= max
 testThreshold = 50 # maximum percentage of allowed failed pixels within the clip
 exportBandList = [4,3,2]
 rescaleType='percentile' # 'value', 'percentile', 'std'
-# for reflectanceRescale: 	if 'value': minSrc and maxSrc are the min-max values
+# for reflectanceRescale: 	if 'value': minSrc and maxSrc are the min-max values (be careful, must be Byte or Int depending on the input value)
 #							if 'std': minSrc=-x, maxSrc=x, then min= average-x*std, max=average+x*std
 #							if 'percentile': minSrc=a, maxSrc=b, min=percentile(a), max=percentile(b)
-reflectanceRescale={'minSrc':500, 'maxSrc':3000, 'minTrgt':0, 'maxTrgt':255}
+reflectanceRescale={'minSrc':500, 'maxSrc':3000, 'minTrgt':0, 'maxTrgt':255} # example for rescaleType='value'
+#reflectanceRescale={'minSrc':-1.5, 'maxSrc':1.5, 'minTrgt':0, 'maxTrgt':255} # example for rescaleType='std'
+#reflectanceRescale={'minSrc':10, 'maxSrc':90, 'minTrgt':0, 'maxTrgt':255} # example for rescaleType='percentile'
 IDField="FID"
 
 #
