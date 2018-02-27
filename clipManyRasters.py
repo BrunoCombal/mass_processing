@@ -7,18 +7,43 @@ import re
 
 #__________________________________________________
 # Edit following parameters
+# Be careful to change all parameters related to the specific sensor
 # Be aware that SPOT6 has more bands than SPOT 3-5
+
+#Input directory - with the images to clip
 #rInDir=u'z://Processing/All_Kongo_images/Selection_Rep_of_Congo/Selection_Spot2010/Spot4_5' # raster input dir
 rInDir=u'z://Processing/All_Kongo_images/Selection_Rep_of_Congo/Selection_Spot2015/Spot5'
+
+#Output directory - create 3 folders to store the good, bad and duplicate clips
 rOutDir=u'e://tmp/clip' #clip output dir
 rRejectDir=u'e://tmp/clipBad' # rejected
 duplicateDir=u'e://tmp/duplicate'
+
+#select rule of the images to clip in the input directory
 selectRule=u'*.tif' # wildcard rule
+
+#shapefile to clip the images
 shapefile=u'e://tmp/clip/clipper_2km_square.shp'
-testBand = 2
-testMinMax=[0, 250] # pixel fails if value <= min or value >= max
-testThreshold = 50 # maximum percentage of allowed failed pixels within the clip
-exportBandList = [4,3,2]
+
+#band on which the test for clouds and no data is done
+#testBand = 2 #SPOT 4 or 5
+testBand = 3 # Landsat et sentinel
+
+#values for cloud masking
+#testMinMax=[0, 248] # pixel fails if value <= min or value >= max SPOT4 or 5
+#testMinMax=[0, 60] # pixel fails if value <= min or value >= max Landsat
+testMinMax=[0, 1850] # pixel fails if value <= min or value >= max S2
+
+#threshold allowed for failed pixels within the clip
+#testThreshold = 20 # maximum percentage of allowed failed pixels within the clip
+testThreshold = 10 # lower the percentage for Sentinel 2 maximum percentage of allowed failed pixels within the clip
+
+#Bands to export in the clip
+#exportBandList = [4,1,2] #SPOT4 or 5
+exportBandList = [5,4,3] # Landsat or S2
+
+# rescale the input images (for S2 images come in Uint16 0-10000
+# for spot or landsat put the input value to 0-255
 rescaleType='percentile' # 'value', 'percentile', 'std'
 # for reflectanceRescale: 	if 'value': minSrc and maxSrc are the min-max values (be careful, must be Byte or Int depending on the input value)
 #							if 'std': minSrc=-x, maxSrc=x, then min= average-x*std, max=average+x*std
