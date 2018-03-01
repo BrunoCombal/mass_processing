@@ -82,7 +82,7 @@ def rescale(outFile, ds, scaleType, scaleParams, bandList, format, outputType, o
 		elif rescaleType == 'std':
 			average = thisData.mean()
 			std = thisData.std()
-			dataMinVal = average - scaleParams[0]*std
+			dataMinVal = average + scaleParams[0]*std
 			dataMaxVal = average + scaleParams[1]*std
 			thisDataNew = scaleParams[2]+(scaleParams[3]-scaleParams[2])*(thisData - dataMinVal)/float(dataMaxVal-dataMinVal)
 		else:
