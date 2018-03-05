@@ -11,21 +11,22 @@ import re
 # Be aware that SPOT6 has more bands than SPOT 3-5
 
 #Input directory - with the images to clip
-rInDir=u'Y://Processing/All_Kongo_images/Selection_Rep_of_Congo/Selection_Spot2015/Spot5_norm' # raster input dir
+rInDir=u'Z://Processing/All_Kongo_images/Selection_Rep_of_Congo/Selection_Spot2015/Spot5_norm' # raster input dir
 #rInDir=u'Y://Processing/All_Kongo_images/Selection_Rep_of_Congo/Selection_Spot2015/Spot5_norm'
 #rInDir=u'Y://Processing/All_Kongo_images/Selection_Rep_of_Congo/Selection_Landsat_2014/processed2014'
 #rInDir=u'P://Kongo_sentinel2_processed'
 
 #Output directory - create 3 folders to store the good, bad and duplicate clips
 rOutDir=u'e://tmp/clip' #clip output dir
-rRejectDir=u'e://tmp/clipBad' # rejected
-duplicateDir=u'e://tmp/duplicate'
+rRejectDir=u'e://tmp/clipBad/' # rejected
+duplicateDir=u'e://tmp/duplicate/'
 
 #select rule of the images to clip in the input directory
-selectRule=u'*2*.tif' # wildcard rule
+selectRule=u'*21*.tif' # wildcard rule
 
 #shapefile to clip the images
-shapefile=u'E://verheas/ReCaREDD/WorkingData/1_RecaREDD_project/Brazza_2018/sampling/sampling_F-NF/CE_2018-03-01_F-NF/shpfile_CE_2018-03-01_F-NF-box.shp'
+shapefile=u'E:/tmp/clip/clipper_2km_square.shp'
+#u'E://verheas/ReCaREDD/WorkingData/1_RecaREDD_project/Brazza_2018/sampling/sampling_F-NF/CE_2018-03-01_F-NF/shpfile_CE_2018-03-01_F-NF-box.shp'
 
 #band on which the test for clouds and no data is done
 testBand = 2 #SPOT 4 or 5
@@ -168,7 +169,7 @@ def testValid(ds, testBand, minmax, threshold):
 
     nbPixels = ns*nl
     nbNodata = sum( (data <= minmax[0]) + (data >= minmax[1]) )
-    propNoData = nbNodata/(nbPixels)
+    propNoData = nbNodata/float(nbPixels)
     if propNoData >= threshold:
         return False
     else:
