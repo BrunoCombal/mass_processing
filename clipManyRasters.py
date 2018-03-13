@@ -11,22 +11,21 @@ import re
 # Be aware that SPOT6 has more bands than SPOT 3-5
 
 #Input directory - with the images to clip
-rInDir=u'Z://Processing/All_Kongo_images/Selection_Rep_of_Congo/Selection_Spot2015/Spot5_norm' # raster input dir
-#rInDir=u'Y://Processing/All_Kongo_images/Selection_Rep_of_Congo/Selection_Spot2015/Spot5_norm'
-#rInDir=u'Y://Processing/All_Kongo_images/Selection_Rep_of_Congo/Selection_Landsat_2014/processed2014'
-#rInDir=u'P://Kongo_sentinel2_processed'
+rInDir=u'C:/Users/Training/Desktop/Selection_Spot2010/Spot4_5' # raster input dir
 
 #Output directory - create 3 folders to store the good, bad and duplicate clips
-rOutDir=u'e://tmp/clip' #clip output dir
-rRejectDir=u'e://tmp/clipBad/' # rejected
-duplicateDir=u'e://tmp/duplicate/'
+rOutDir=u'c://tmp/clip' #clip output dir
+rRejectDir=u'c://tmp/clipBad/' # rejected
+duplicateDir=u'c://tmp/duplicate/'
 
 #select rule of the images to clip in the input directory
-selectRule=u'*21*.tif' # wildcard rule
+selectRule=u'*.tif' # selection rule, accept wildcards like * and ?, and multi-selectors like []
 
 #shapefile to clip the images
-shapefile=u'E:/tmp/clip/clipper_2km_square.shp'
+shapefile=u'C:/Users/Training/Desktop/Selection_Spot2010/pts_CE_2018-02-21_box_2km.shp'
 #u'E://verheas/ReCaREDD/WorkingData/1_RecaREDD_project/Brazza_2018/sampling/sampling_F-NF/CE_2018-03-01_F-NF/shpfile_CE_2018-03-01_F-NF-box.shp'
+IDField="id"   # If not empty, use the corresponding field value for the output file name
+                # if empty, the code uses the feature FID value in the output file name
 
 #band on which the test for clouds and no data is done
 testBand = 2 #SPOT 4 or 5
@@ -42,7 +41,7 @@ testThreshold = 20 # maximum percentage of allowed failed pixels within the clip
 #testThreshold = 10 # lower the percentage for Sentinel 2 maximum percentage of allowed failed pixels within the clip
 
 #Bands to export in the clip
-exportBandList = [4,1,2] #SPOT4 or 5
+exportBandList = [4, 1, 2] #SPOT4 or 5
 #exportBandList = [5,4,3] # Landsat or S2
 
 # rescale the input images (for S2 images come in Uint16 0-10000
@@ -54,7 +53,7 @@ rescaleType='value' # 'value', 'percentile', 'std'
 reflectanceRescale={'minSrc':0, 'maxSrc':255, 'minTrgt':0, 'maxTrgt':255} # example for rescaleType='value'
 #reflectanceRescale={'minSrc':-2.5, 'maxSrc':2.5, 'minTrgt':0, 'maxTrgt':255} # example for rescaleType='std'
 #reflectanceRescale={'minSrc':10, 'maxSrc':90, 'minTrgt':0, 'maxTrgt':255} # example for rescaleType='percentile'
-IDField="FID"
+
 
 #
 # rescale image values
@@ -181,9 +180,12 @@ def testValid(ds, testBand, minmax, threshold):
 #
 for thisDir in [rInDir, rOutDir, rRejectDir, duplicateDir]:
     if not os.path.isdir(thisDir):
-        print 'Directory {} does not exists'.format(thisDir)
-        sys.exit()
-
+        print 'Directory {} does not exists, creating'.format(thisDir)
+        try:
+            os.makedirs(thisDir)
+        except IOError:
+            print 'Error while creating {}. Aborting code.'.format(thisDir)
+            sys.exit()
 
 # get list of files matching the regex rule
 print 'Getting list of raster files to process'
@@ -203,6 +205,14 @@ for ii in inRasterFnames:
 # clip
 inShp = ogr.Open(shapefile, gdalconst.GA_ReadOnly)
 layer = inShp.GetLayer()
+# do we use a field value or the feature FDI?
+IDFieldPos = -1
+if IDField!='':
+    layerDef = layer.GetLayerDefn()
+    for ii in range(layerDef.GetFieldCount()):
+        #print ii, IDField, layerDef.GetFieldDefn(ii).GetName()
+        if layerDef.GetFieldDefn(ii).GetName()==IDField:
+            IDFieldPos=ii
 
 for rr in rasterBBox:
     print "Processing raster {}".format(os.path.basename(rr))
@@ -233,7 +243,10 @@ for rr in rasterBBox:
             try:
                 ds = gdal.Translate('', rr, format = 'MEM', projWin = [pointMin[0], pointMax[1], pointMax[0], pointMin[1]])
                 date, sensor = extractInfo(os.path.basename(rr))
-                outFileBasename = 'fid_{}_{}_{}.tif'.format(iFeat.GetFID(), date, sensor)
+                if IDFieldPos > 0:
+                    outFileBasename = 'fid_{}_{}_{}.tif'.format(iFeat.GetFID(), date, sensor)
+                else:
+                    outFileBasename = '{}_{}_{}_{}.tif'.format(IDField, iFeat.GetField(IDFieldPos), date, sensor)
                 if os.path.exists(os.path.join(rOutDir, outFileBasename)):
                     outFile = os.path.join(duplicateDir, outFileBasename)
                 else:
