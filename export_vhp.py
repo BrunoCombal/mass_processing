@@ -21,8 +21,7 @@ uly=75.024002
 lry=-55.152
 ncols=10000
 nlines=3616
-psx=int((lrx-ulx)/float(ncols))
-psy=int((uly-lry)/float(nlines))
+
 wulx=-11.0
 wlrx=19
 wlry=-5.2
@@ -34,7 +33,7 @@ options=['compress=lzw']
 # define a regular output name
 def defineName(inName):
 
-	return 'ndvi_{}_.tif'.format(inName.replace('VHP.G04.C07.NJ.P','').replace('.SM.nc',''))
+	return 'ndvi_{}.tif'.format(inName.replace('VHP.G04.C07.NJ.P','').replace('.SM.nc','').replace('.','_'))
 # _______________________________
 # main code
 
@@ -43,19 +42,57 @@ inFnames = [os.path.join(dirpath, f) for dirpath, dirnames, files in os.walk(inD
 if not os.path.isdir(outDir):
 	os.makedirs(outDir)
 
-gt=[ulx, psx, 0, uly, 0, -psy]
+
+proj = osr.SpatialReference()
+proj.ImportFromEPSG(4326)
+tmpName=os.path.join(outDir, 'tmp_export_vhp.tif')
 
 # loop over list, read binary, write as image
 for ii in inFnames:
 	print ii
+	if os.path.exists(tmpName):
+		os.remove(tmpName)
 	outName = os.path.join(outDir, defineName(os.path.basename(ii)))
 	#os.system('gdal_translate -of gtiff -co compress=lzw "NETCDF:{}:SMN" "{}"'.format(ii, outName))
 	thisFid = gdal.Open('NETCDF:"{}":SMN'.format(ii), gdalconst.GA_ReadOnly)
+	ncols = thisFid.RasterXSize
+	nlines= thisFid.RasterYSize
+	psx=(lrx-ulx)/float(ncols)
+	psy=(uly-lry)/float(nlines)
+	print  lrx, ulx, ncols
+	print uly, lry, nlines
+	gt=[ulx, psx, 0, uly, 0, -psy]
+	print ncols, nlines, psx, psy
+	print gt
+	print thisFid.GetRasterBand(1).DataType
+	print outName
 	thisData = numpy.flipud(thisFid.GetRasterBand(1).ReadAsArray(0, 0, ncols, nlines))
-	thisOut = gdal.GetDriverByName(format).Create(outName, ncols, nlines, 1, outputType, options=options )
-	thisOut.SetProjection('EPSG:4326')
-	thisOut.SetGeoTransform(gt)
-	thisOut.GetRasterBand(1).WriteArray(thisData.reshape(ncols, -1))
+	print thisData.max()
+	print thisData.min()
+	print thisData.mean()
+	print thisData.shape
+	try:
+		thisOut = gdal.GetDriverByName(format).Create(tmpName, ncols, nlines, 1, thisFid.GetRasterBand(1).DataType, options=options )
+		thisOut.SetProjection(proj.ToWkt())
+		print proj.ToWkt()
+		thisOut.SetGeoTransform(gt)
+		print gt
+		thisOut.GetRasterBand(1).WriteArray(thisData, 0, 0)
+		thisOut = None
+	except:
+		print 'error'
+	finally:
+		thisOut = None
+	try:
+		thisIn = gdal.Open(tmpName, gdalconst.GA_ReadOnly)
+		#outFid = gdal.GetDriverByName(format).Create(outName, ncols, nlines, 1, thisFid.GetRasterBand(1).DataType, options=options )
+		print outName
+		ds = gdal.Translate(outName, thisOut, format = format, options=options, projWin = [wulx, wuly, wlrx, wlry])
+		ds = None
+	except:
+		print 'error in gdal.Translate'
+	finally:
+		ds = None
 	stop()
 
 # end of script
