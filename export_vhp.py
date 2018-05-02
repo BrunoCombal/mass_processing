@@ -22,7 +22,7 @@ lry=-55.152
 ncols=10000
 nlines=3616
 
-wulx=-11.0
+wulx=10.5
 wlrx=19
 wlry=-5.2
 wuly=3.7
@@ -33,7 +33,7 @@ options=['compress=lzw']
 # define a regular output name
 def defineName(inName):
 
-	return 'ndvi_{}.tif'.format(inName.replace('VHP.G04.C07.NJ.P','').replace('.SM.nc','').replace('.','_'))
+	return 'ndvi_{}.tif'.format(inName.replace('VHP.G04.C07.NJ.P','').replace('VHP_G04_C07_NP_P','').replace('.SM.nc','').replace('.','_'))
 # _______________________________
 # main code
 
@@ -50,6 +50,7 @@ tmpName=os.path.join(outDir, 'tmp_export_vhp.tif')
 # loop over list, read binary, write as image
 for ii in inFnames:
 	print ii
+	thisOut=None
 	if os.path.exists(tmpName):
 		os.remove(tmpName)
 	outName = os.path.join(outDir, defineName(os.path.basename(ii)))
@@ -59,24 +60,17 @@ for ii in inFnames:
 	nlines= thisFid.RasterYSize
 	psx=(lrx-ulx)/float(ncols)
 	psy=(uly-lry)/float(nlines)
-	print  lrx, ulx, ncols
-	print uly, lry, nlines
 	gt=[ulx, psx, 0, uly, 0, -psy]
-	print ncols, nlines, psx, psy
-	print gt
-	print thisFid.GetRasterBand(1).DataType
-	print outName
 	thisData = numpy.flipud(thisFid.GetRasterBand(1).ReadAsArray(0, 0, ncols, nlines))
 	print thisData.max()
 	print thisData.min()
 	print thisData.mean()
 	print thisData.shape
 	try:
+		print 'reading input data'
 		thisOut = gdal.GetDriverByName(format).Create(tmpName, ncols, nlines, 1, thisFid.GetRasterBand(1).DataType, options=options )
-		thisOut.SetProjection(proj.ToWkt())
-		print proj.ToWkt()
+		thisOut.SetProjection(proj.ExportToWkt())
 		thisOut.SetGeoTransform(gt)
-		print gt
 		thisOut.GetRasterBand(1).WriteArray(thisData, 0, 0)
 		thisOut = None
 	except:
@@ -86,13 +80,15 @@ for ii in inFnames:
 	try:
 		thisIn = gdal.Open(tmpName, gdalconst.GA_ReadOnly)
 		#outFid = gdal.GetDriverByName(format).Create(outName, ncols, nlines, 1, thisFid.GetRasterBand(1).DataType, options=options )
-		print outName
-		ds = gdal.Translate(outName, thisOut, format = format, options=options, projWin = [wulx, wuly, wlrx, wlry])
+		print 'gdal.Translate data: cut smaller region'
+		ds = gdal.Translate(outName, thisIn, format = format, options=options, projWin = [wulx, wuly, wlrx, wlry])
 		ds = None
+		thisIn=None
 	except:
 		print 'error in gdal.Translate'
 	finally:
 		ds = None
-	stop()
+		thisIn=None
+
 
 # end of script
